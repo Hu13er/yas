@@ -1,9 +1,9 @@
 [module foobar
 
     export
-    {fn fibo [n] ( fibo-1 n ) fn}
+    {fn fibo [ n ] ( fibo-1 n ) fn}
 
-    {fn fibo-1 [n]
+    {fn fibo-1 [ n ]
         (cond
             0 1 => 1
             otherwise => [:=
@@ -11,12 +11,12 @@
                     where
                     x ( fibo-1 (! n - 1 !) )
                     y ( fibo-1 (! n - 2 !) )
-            :=]
+             :=]
         cond)
     fn}
 
     export
-    {fn fact [n]
+    {fn fact [ n ]
         (->
             ( .. 1 n )
             ( reduce (\ x y -> (* x y *) \) )

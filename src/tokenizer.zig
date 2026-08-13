@@ -6,6 +6,7 @@ pub const Token = struct {
     pub const Tag = enum {
         lopen, lclose,
         symbol,
+        string,
         eof,
         unknown,
     };
@@ -22,10 +23,12 @@ pub const Tokenizer = struct {
     const Self = @This();
 
     const State = enum {
-        fresh,   // LINK: FRESH
-        symbol,  // LINK: SYMBOL
-        lopen,   // LINK: LOPEN
-        invalid, // LINK: INVALID
+        fresh,         // LINK: FRESH
+        symbol,        // LINK: SYMBOL
+        lopen,         // LINK: LOPEN
+        string,        // LINK: STRING
+        string_escape, // LINK: STRING
+        invalid,       // LINK: INVALID
     };
 
     pub fn init(src: [:0]const u8) Self {
@@ -80,6 +83,12 @@ pub const Tokenizer = struct {
                     self.idx += 1;
                     continue :state .fresh;
                 },
+                '"' => {
+                    result.tag = .string;
+                    result.start = self.idx;
+                    self.idx += 1;
+                    continue :state .string;
+                },
                 else => {
                     self.idx += 1;
                     continue :state .invalid;
@@ -122,6 +131,37 @@ pub const Tokenizer = struct {
                     },
                 }
             },
+            .string => {
+                // LINK: STRING
+                switch (self.src[self.idx]) {
+                    '"' => {
+                        result.tag = .string;
+                        result.end = self.idx + 1;
+                        self.idx += 1;
+                    },
+                    '\\' => {
+                        self.idx += 1;
+                        continue :state .string_escape;
+                    },
+                    else => {
+                        self.idx += 1;
+                        continue :state .string;
+                    }
+                }
+            },
+            .string_escape => {
+                // LINK: STRING
+                switch (self.src[self.idx]) {
+                    '\n', 0 => {
+                        self.idx += 1;
+                        continue :state .invalid;
+                    },
+                    else => {
+                        self.idx += 1;
+                        continue :state .string;
+                    },
+                }
+            },
             .invalid => {},
         }
         return result;
@@ -151,7 +191,7 @@ const TestCase = struct {
     }
 
     fn printTokens(self: @This(), tokens: [] const Token) void {
-        for (tokens) |t| std.debug.print("<{any}>: {s}\n", .{t, self.src[t.start .. t.end]});
+        for (tokens) |t| std.debug.print("<{any}>: '{s}'\n", .{t, self.src[t.start .. t.end]});
     }
 
     fn printFail(self: @This()) void {
@@ -225,6 +265,48 @@ test "Basic Tokenizer tests" {
                 .{ .tag = .symbol, .start = 9, .end = 12 },
                 .{ .tag = .lclose, .start = 13, .end = 15 },
                 .{ .tag = .eof, .start = 15, .end = 15},
+            },
+        },
+        .{
+            .desc = "Simple string",
+            .src =
+                \\"Hello world string"
+            ,
+            .expected = &[_]Token{
+                .{ .tag = .string, .start = 0, .end = 20 },
+                .{ .tag = .eof, .start = 20, .end = 20},
+            },
+        },
+        .{
+            .desc = "Two string",
+            .src =
+                \\"ABC" "xyz"
+            ,
+            .expected = &[_]Token{
+                .{ .tag = .string, .start = 0, .end = 5 },
+                .{ .tag = .string, .start = 6, .end = 11},
+                .{ .tag = .eof, .start = 11, .end = 11},
+            },
+        },
+        .{
+            .desc = "String with escape",
+            .src =
+                \\"ABC\"HELLO\"xyz"
+            ,
+            .expected = &[_]Token{
+                .{ .tag = .string, .start = 0, .end = 17 },
+                .{ .tag = .eof, .start = 17, .end = 17},
+            },
+        },
+        .{
+            .desc = "Two strings with escape",
+            .src =
+                \\"ABC\"xyz" "foo\"*meh*\"bar"
+            ,
+            .expected = &[_]Token{
+                .{ .tag = .string, .start = 0, .end = 10 },
+                .{ .tag = .string, .start = 11, .end = 28 },
+                .{ .tag = .eof, .start = 28, .end = 28},
             },
         },
     };
