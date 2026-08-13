@@ -35,7 +35,7 @@ pub fn main(init: std.process.Init) !void {
             .unknown => "UNKNOWN",
         };
         const content = src[token.start .. token.end];
-        try stdout.interface.print("<{s}:{d}:{d} {s}>\n",
+        try stdout.interface.print("<{s}:{d}:{d} '{s}'>\n",
             .{tag, token.start, token.end, content});
     }
 }
