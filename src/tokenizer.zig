@@ -212,6 +212,8 @@ test "Basic Tokenizer tests" {
             .desc = "Single Symbol",
             .src =
                 \\foobar
+                // f  o  o  b  a  r
+                // 00 01 02 03 04 05
             ,
             .expected = &[_]Token{
                 .{ .tag = .symbol, .start = 0, .end = 6 },
@@ -222,6 +224,8 @@ test "Basic Tokenizer tests" {
             .desc = "Single Symbol with star",
             .src =
                 \\foo*bar*baz
+                // f  o  o  *  b  a  r  *  b  a  z
+                // 00 01 02 03 04 05 06 07 08 09 10
             ,
             .expected = &[_]Token{
                 .{ .tag = .symbol, .start = 0, .end = 11 },
@@ -232,6 +236,8 @@ test "Basic Tokenizer tests" {
             .desc = "Multi symbols with whitespaces",
             .src =
                 \\*foo* *bar*
+                // *  f  o  o  *     *  b  a  r  *
+                // 00 01 02 03 04 05 06 07 08 09 10
             ,
             .expected = &[_]Token{
                 .{ .tag = .symbol, .start = 0, .end = 5 },
@@ -243,6 +249,8 @@ test "Basic Tokenizer tests" {
             .desc = "Simple parentheses",
             .src =
                 \\( + foo bar )
+                // (     +     f  o  o     b  a  r     )
+                // 00 01 02 03 04 05 06 07 08 09 10 11 12
             ,
             .expected = &[_]Token{
                 .{ .tag = .lopen, .start = 0, .end = 1 },
@@ -257,6 +265,8 @@ test "Basic Tokenizer tests" {
             .desc = "Annotated parentheses",
             .src =
                 \\(! + foo bar !)
+                // (  !     +     f  o  o     b  a  r     !  )
+                // 00 01 02 03 04 05 06 07 08 09 10 11 12 13 14
             ,
             .expected = &[_]Token{
                 .{ .tag = .lopen, .start = 0, .end = 2 },
@@ -271,6 +281,8 @@ test "Basic Tokenizer tests" {
             .desc = "Simple string",
             .src =
                 \\"Hello world string"
+                // "  H  e  l  l  o     w  o  r  l  d     s  t  r  i  n  g  "
+                // 00 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 16 17 18 19
             ,
             .expected = &[_]Token{
                 .{ .tag = .string, .start = 0, .end = 20 },
@@ -281,6 +293,8 @@ test "Basic Tokenizer tests" {
             .desc = "Two string",
             .src =
                 \\"ABC" "xyz"
+                // "  A  B  C  "     "  x  y  z  "
+                // 00 01 02 03 04 05 06 07 08 09 10
             ,
             .expected = &[_]Token{
                 .{ .tag = .string, .start = 0, .end = 5 },
@@ -292,6 +306,8 @@ test "Basic Tokenizer tests" {
             .desc = "String with escape",
             .src =
                 \\"ABC\"HELLO\"xyz"
+                // "  A  B  C  \  "  H  E  L  L  O  \  "  x  y  z  "
+                // 00 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 16
             ,
             .expected = &[_]Token{
                 .{ .tag = .string, .start = 0, .end = 17 },
@@ -302,6 +318,8 @@ test "Basic Tokenizer tests" {
             .desc = "Two strings with escape",
             .src =
                 \\"ABC\"xyz" "foo\"*meh*\"bar"
+                // "  A  B  C  \  "  x  y  z  "     "  f  o  o  \  "  *  m  e  h  *  \  "  b  a  r  "
+                // 00 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27
             ,
             .expected = &[_]Token{
                 .{ .tag = .string, .start = 0, .end = 10 },
