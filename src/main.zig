@@ -30,6 +30,8 @@ pub fn main(init: std.process.Init) !void {
             .lclose => "LCLOSE",
             .symbol => "SYMBOL",
             .string => "STRING",
+            .number => "NUMBER",
+            .comment => "COMMENT",
             .unknown => "UNKNOWN",
         };
         const content = src[token.start .. token.end];

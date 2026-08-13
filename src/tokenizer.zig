@@ -7,6 +7,8 @@ pub const Token = struct {
         lopen, lclose,
         symbol,
         string,
+        number,  // TODO
+        comment, // TODO
         eof,
         unknown,
     };
@@ -28,6 +30,7 @@ pub const Tokenizer = struct {
         lopen,         // LINK: LOPEN
         string,        // LINK: STRING
         string_escape, // LINK: STRING
+        comment,       // LINK: COMMENT
         invalid,       // LINK: INVALID
     };
 
@@ -88,6 +91,13 @@ pub const Tokenizer = struct {
                     result.start = self.idx;
                     self.idx += 1;
                     continue :state .string;
+                },
+                ';' => {
+                    // LINK: COMMENT
+                    result.tag = .comment;
+                    result.start = self.idx;
+                    self.idx += 1;
+                    continue :state .comment;
                 },
                 else => {
                     self.idx += 1;
@@ -152,14 +162,30 @@ pub const Tokenizer = struct {
             .string_escape => {
                 // LINK: STRING
                 switch (self.src[self.idx]) {
-                    '\n', 0 => {
-                        self.idx += 1;
-                        continue :state .invalid;
-                    },
+                    '\n', 0 => continue :state .invalid,
                     else => {
                         self.idx += 1;
                         continue :state .string;
                     },
+                }
+            },
+            .comment => {
+                // LINK: COMMENT
+                switch (self.src[self.idx]) {
+                    '\n' => {
+                        result.tag = .comment;
+                        result.end = self.idx + 1;
+                        self.idx += 1;
+                        continue :state .fresh;
+                    },
+                    0 => {
+                        result.tag = .comment;
+                        result.end = self.idx;
+                    },
+                    else => {
+                        self.idx += 1;
+                        continue :state .comment;
+                    }
                 }
             },
             .invalid => {},
@@ -183,7 +209,7 @@ const TestCase = struct {
 
     fn printHeader(self: @This()) void {
         if (self.desc.len > 0) {
-            debug.print("--- {s} ---\n", .{self.desc});
+            debug.print("\n--- {s} ---\n", .{self.desc});
         } else {
             debug.print("-----------\n", .{});
         }
@@ -325,6 +351,44 @@ test "Basic Tokenizer tests" {
                 .{ .tag = .string, .start = 0, .end = 10 },
                 .{ .tag = .string, .start = 11, .end = 28 },
                 .{ .tag = .eof, .start = 28, .end = 28},
+            },
+        },
+        .{
+            .desc = "Simple comment",
+            .src =
+                \\;comment
+                // ;  c  o  m  m  e  n  t
+                // 00 01 02 03 04 05 06 07
+            ,
+            .expected = &[_]Token{
+                .{ .tag = .comment, .start = 0, .end = 8 },
+                .{ .tag = .eof, .start = 8, .end = 8},
+            },
+        },
+        .{
+            .desc = "Comment after code",
+            .src =
+                \\*foobar*;comment *foobar*
+                // *  f  o  o  b  a  r  *  ;  c  o  m  m  e  n  t     *  f  o  o  b  a  r  *
+                // 00 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24
+            ,
+            .expected = &[_]Token{
+                .{ .tag = .symbol, .start = 0, .end = 8 },
+                .{ .tag = .comment, .start = 8, .end = 25 },
+                .{ .tag = .eof, .start = 25, .end = 25},
+            },
+        },
+        .{
+            .desc = "Comment after code space",
+            .src =
+                \\*foobar* ;comment *foobar*
+                // *  f  o  o  b  a  r  *     ;  c  o  m  m  e  n  t     *  f  o  o  b  a  r  *
+                // 00 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25
+            ,
+            .expected = &[_]Token{
+                .{ .tag = .symbol, .start = 0, .end = 8 },
+                .{ .tag = .comment, .start = 9, .end = 26 },
+                .{ .tag = .eof, .start = 26, .end = 26},
             },
         },
     };
