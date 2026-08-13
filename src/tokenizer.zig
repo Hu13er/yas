@@ -7,8 +7,8 @@ pub const Token = struct {
         lopen, lclose,
         symbol,
         string,
-        number,  // TODO
-        comment, // TODO
+        number,
+        comment,
         eof,
         unknown,
     };
@@ -31,6 +31,8 @@ pub const Tokenizer = struct {
         string,        // LINK: STRING
         string_escape, // LINK: STRING
         comment,       // LINK: COMMENT
+        float,         // LINK: NUMBER
+        int,           // LINK: NUMBER
         invalid,       // LINK: INVALID
     };
 
@@ -72,7 +74,7 @@ pub const Tokenizer = struct {
                     result.end = self.idx + 1;
                     self.idx += 1;
                 },
-                'a'...'z', 'A'...'Z', '0'...'9',
+                'a'...'z', 'A'...'Z',
                 '+', '-', '*', '/', '=', '<', '>',
                 '?', '!', '%', '&', '|', ':', '_',
                 '@' => {
@@ -81,6 +83,18 @@ pub const Tokenizer = struct {
                     result.start = self.idx;
                     self.idx += 1;
                     continue :state .symbol;
+                },
+                '0'...'9' => {
+                    // LINK: NUMBER
+                    result.tag = .number;
+                    result.start = self.idx;
+                    continue :state .int;
+                },
+                '.' => {
+                    // LINK: NUMBER
+                    result.tag = .number;
+                    result.start = self.idx;
+                    continue :state .float;
                 },
                 ' ', '\t', '\n' => {
                     self.idx += 1;
@@ -110,7 +124,7 @@ pub const Tokenizer = struct {
                     'a'...'z', 'A'...'Z', '0'...'9',
                     '+', '-', '*', '/', '=', '<', '>',
                     '?', '!', '%', '&', '|', ':', '_',
-                    '@' => {
+                    '@', '.' => {
                         self.idx += 1;
                         continue :state .symbol;
                     },
@@ -121,6 +135,56 @@ pub const Tokenizer = struct {
                     },
                     else => {
                         result.tag = .symbol;
+                        result.end = self.idx;
+                    },
+                }
+            },
+            .int => {
+                // LINK: NUMBER
+                switch (self.src[self.idx]) {
+                    '0'...'9' => {
+                        self.idx += 1;
+                        continue :state .int;
+                    },
+                    '.' => {
+                        self.idx += 1;
+                        continue :state .float;
+                    },
+                    'a'...'z', 'A'...'Z',
+                    '+', '-', '*', '/', '=', '<', '>',
+                    '?', '!', '%', '&', '|', ':', '_',
+                    '@' => {
+                        continue :state .symbol;
+                    },
+                    ')', '}', ']' => {
+                        self.idx += 1;
+                        continue :state .invalid;
+                    },
+                    else => {
+                        result.tag = .number;
+                        result.end = self.idx;
+                    },
+                }
+            },
+            .float => {
+                // LINK: NUMBER
+                switch (self.src[self.idx]) {
+                    '0'...'9' => {
+                        self.idx += 1;
+                        continue :state .float;
+                    },
+                    'a'...'z', 'A'...'Z',
+                    '+', '-', '*', '/', '=', '<', '>',
+                    '?', '!', '%', '&', '|', ':', '_',
+                    '@', '.' => {
+                        continue :state .symbol;
+                    },
+                    ')', '}', ']' => {
+                        self.idx += 1;
+                        continue :state .invalid;
+                    },
+                    else => {
+                        result.tag = .number;
                         result.end = self.idx;
                     },
                 }
@@ -389,6 +453,67 @@ test "Basic Tokenizer tests" {
                 .{ .tag = .symbol, .start = 0, .end = 8 },
                 .{ .tag = .comment, .start = 9, .end = 26 },
                 .{ .tag = .eof, .start = 26, .end = 26},
+            },
+        },
+        .{
+            .desc = "Simple number",
+            .src =
+                \\3.1415
+                // 3  .  1  4  1  5
+                // 00 01 02 03 04 05
+            ,
+            .expected = &[_]Token{
+                .{ .tag = .number, .start = 0, .end = 6 },
+                .{ .tag = .eof, .start = 6, .end = 6},
+            },
+        },
+        .{
+            .desc = "Numbers concatted with alphabets are symbol",
+            .src =
+                \\3.1415abc
+                // 3  .  1  4  1  5  a  b  c
+                // 00 01 02 03 04 05 06 07 08
+            ,
+            .expected = &[_]Token{
+                .{ .tag = .symbol, .start = 0, .end = 9 },
+                .{ .tag = .eof, .start = 9, .end = 9},
+            },
+        },
+        .{
+            .desc = "Numbers concatted with other chars are symbol",
+            .src =
+                \\3.1415*foo 3.14*5
+                // 3  .  1  4  1  5  *  f  o  o     3  .  1  4  *  5
+                // 00 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15 16
+            ,
+            .expected = &[_]Token{
+                .{ .tag = .symbol, .start = 0, .end = 10 },
+                .{ .tag = .symbol, .start = 11, .end = 17 },
+                .{ .tag = .eof, .start = 17, .end = 17},
+            },
+        },
+        .{
+            .desc = "Numbers with two dots are symbols",
+            .src =
+                \\3.1415.
+                // 3  .  1  4  1  5  .
+                // 00 01 02 03 04 05 06
+            ,
+            .expected = &[_]Token{
+                .{ .tag = .symbol, .start = 0, .end = 7 },
+                .{ .tag = .eof, .start = 7, .end = 7},
+            },
+        },
+        .{
+            .desc = "Numbers between two dots are symbols",
+            .src =
+                \\.314.
+                // .  3  1  4  .
+                // 00 01 02 03 04
+            ,
+            .expected = &[_]Token{
+                .{ .tag = .symbol, .start = 0, .end = 5 },
+                .{ .tag = .eof, .start = 5, .end = 5},
             },
         },
     };
