@@ -154,7 +154,7 @@ pub const Parser = struct {
                     const current_kind = self.source[current_token.end-1];
                     const current_annot = if (current_token.end > current_token.start+1)
                         self.source[current_token.start .. current_token.end-1]
-
+                    else
                         null;
                     self.index += 1;
 
