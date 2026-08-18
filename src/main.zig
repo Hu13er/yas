@@ -1,8 +1,11 @@
 const std = @import("std");
+const debug = std.debug;
 const Io = std.Io;
 
 const yas = @import("yas");
+const Token = yas.tokenizer.Token;
 const Tokenizer = yas.tokenizer.Tokenizer;
+const Parser = yas.parser.Parser;
 
 pub fn main(init: std.process.Init) !void {
     const allocator = init.arena.allocator();
@@ -20,22 +23,21 @@ pub fn main(init: std.process.Init) !void {
         .of(u8),
         comptime 0);
 
-    try stderr.interface.print("Tokenized stdin:\n", .{});
+    const tokens = blk: {
+        var tknizer = Tokenizer.init(src);
+        var tokens = try std.ArrayList(Token).initCapacity(allocator, 2);
+        while (tknizer.next()) |t|
+            try tokens.append(allocator, t);
+        break :blk try tokens.toOwnedSlice(allocator);
+    };
 
-    var tk = Tokenizer.init(src);
-    while (tk.next()) |token| {
-        const tag = switch (token.tag) {
-            .eof => "EOF",
-            .lopen => "LOPEN",
-            .lclose => "LCLOSE",
-            .symbol => "SYMBOL",
-            .string => "STRING",
-            .number => "NUMBER",
-            .comment => "COMMENT",
-            .unknown => "UNKNOWN",
-        };
-        const content = src[token.start .. token.end];
-        try stdout.interface.print("<{s}:{d}:{d} '{s}'>\n",
-            .{tag, token.start, token.end, content});
+    var parser = try Parser.init(allocator, src, tokens);
+    const ast = try parser.parse();
+
+    try stderr.interface.print("Parsed stdin:\n", .{});
+    if (ast) |a| {
+        try a.print(&stdout.interface);
+    } else {
+        try stdout.interface.print("<NULL>\n", .{});
     }
 }

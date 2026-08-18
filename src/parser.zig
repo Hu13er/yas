@@ -3,6 +3,7 @@ const mem = std.mem;
 const debug = std.debug;
 const testing = std.testing;
 const ArenaAllocator = std.heap.ArenaAllocator;
+const Io = std.Io;
 
 const tokenizer = @import("tokenizer.zig");
 const Token = tokenizer.Token;
@@ -14,29 +15,47 @@ const Tokenizer = tokenizer.Tokenizer;
 // List = "(smth" Form* "smth)"
 //
 
-const Node = union (enum) {
+pub const Node = union (enum) {
     list: List,
     symbol: Symbol,
     string: String,
     number: Number,
 
-    const List = struct {
+    pub const List = struct {
         items: []const Node,
         annotated: bool,
     };
-    const Symbol = struct {
+    pub const Symbol = struct {
         value: []const u8,
     };
-    const String = struct {
+    pub const String = struct {
         value: []const u8,
     };
-    const Number = struct {
+    pub const Number = struct {
         value: f32,
         is_float: bool,
     };
+
+    pub fn print(self: @This(), writer: *Io.Writer) !void {
+        try self.printIndent(0, writer);
+    }
+
+    fn printIndent(self: *const @This(), tabs: usize, writer: *Io.Writer) !void {
+        for (0..tabs) |_| try writer.print("\t", .{});
+        switch (self.*) {
+            .string => |s| try writer.print("<STRING:'{s}'>\n", .{s.value}),
+            .symbol => |s| try writer.print("<SYMBOL:'{s}'>\n", .{s.value}),
+            .number => |n| try writer.print("<NUMBER:'{d}',is_float:{}>\n", .{n.value, n.is_float}),
+            .list => |l| {
+                try writer.print("<LIST,len:{},annotated:{}>:\n", .{l.items.len, l.annotated});
+                for (l.items) |i|
+                    try i.printIndent(tabs+1, writer);
+            },
+        }
+    }
 };
 
-const Parser = struct {
+pub const Parser = struct {
     source: [:0]const u8,
     tokens: []const Token,
     index: usize,
@@ -60,7 +79,7 @@ const Parser = struct {
         }
     };
 
-    const Error = error {
+    pub const Error = error {
         unexpected_token,
         unexpected_eof,
         unknown_token,
@@ -68,7 +87,7 @@ const Parser = struct {
         parse_error,
     };
 
-    fn init(gpa: mem.Allocator, source: [:0] const u8, tokens: []const Token) !Self {
+    pub fn init(gpa: mem.Allocator, source: [:0] const u8, tokens: []const Token) !Self {
         const arena = try gpa.create(ArenaAllocator);
         errdefer gpa.destroy(arena);
 
@@ -85,13 +104,12 @@ const Parser = struct {
         };
     }
 
-    fn deinit(self: *Self, gpa: mem.Allocator) void {
+    pub fn deinit(self: *Self, gpa: mem.Allocator) void {
         self.arena.deinit();
         gpa.destroy(self.arena);
     }
 
-    // {fn *foobar* [ n ] (+ n 1 +) fn}
-    fn parse(self: *Self) (mem.Allocator.Error||Error)!?Node {
+    pub fn parse(self: *Self) (mem.Allocator.Error||Error)!?Node {
         const head = self.tokens[self.index];
         return switch (head.tag) {
             .lopen => try self.parseList(),
@@ -129,9 +147,6 @@ const Parser = struct {
             try items.append(allocator, .{ .symbol = .{ .value = allocated } });
         }
 
-        debug.print("start_kind {c}\n", .{start_kind});
-        if (start_annot) |ca| debug.print("start_anot {s}\n", .{ca});
-
         while (true) {
             const current_token = self.tokens[self.index];
             switch (current_token.tag) {
@@ -139,12 +154,9 @@ const Parser = struct {
                     const current_kind = self.source[current_token.end-1];
                     const current_annot = if (current_token.end > current_token.start+1)
                         self.source[current_token.start .. current_token.end-1]
-                    else
+
                         null;
                     self.index += 1;
-
-                    debug.print("current_kind {c}\n", .{current_kind});
-                    if (current_annot) |ca| debug.print("current_anot {s}\n", .{ca});
 
                     // matching list terminals should have same annotation and kind
                     // for example:
@@ -238,25 +250,12 @@ const TestCase = struct {
         debug.print("{s}\n", .{self.src});
     }
 
-    fn printAst(self: @This(), ast: ?Node) void {
-        self.printAstTabs(ast, 0);
-    }
-
-    fn printAstTabs(self: @This(), ast: ?Node, tabs: usize) void {
-        for (0..tabs) |_| debug.print("\t", .{});
+    fn printAst(self: @This(), ast: ?Node, writer: *Io.Writer) void {
+        _ = self;
         if (ast) |a| {
-            switch (a) {
-                .string => |s| debug.print("<STRING:'{s}'>\n", .{s.value}),
-                .symbol => |s| debug.print("<SYMBOL:'{s}'>\n", .{s.value}),
-                .number => |n| debug.print("<NUMBER:'{d}',is_float:{}>\n", .{n.value, n.is_float}),
-                .list => |l| {
-                    debug.print("<LIST,len:{},annotated:{}>:\n", .{l.items.len, l.annotated});
-                    for (l.items) |i|
-                        self.printAstTabs(i, tabs+1);
-                },
-            }
+            a.print(writer) catch {};
         } else {
-            debug.print("<NULL>\n", .{});
+            writer.print("<NULL>\n", .{}) catch {};
         }
     }
 
@@ -339,6 +338,7 @@ test "Parser tests" {
     };
 
     const allocator = testing.allocator;
+    var stderr = Io.File.stderr().writer(testing.io, &.{});
     if (PRINT) debug.print("\n-== Parser Tests ==-\n", .{});
     for (test_cases) |tc| {
         if (PRINT) tc.printHeader();
@@ -351,7 +351,7 @@ test "Parser tests" {
         defer parser.deinit(allocator);
         const ast = try parser.parse();
 
-        if (PRINT) tc.printAst(ast);
+        if (PRINT) tc.printAst(ast, &stderr.interface);
         testing.expectEqualDeep(tc.expected, ast) catch |e| {
             if (PRINT) tc.printFail();
             return e;
