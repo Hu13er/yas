@@ -4,10 +4,10 @@
     {fn fibo [ n ] ( fibo-1 n ) fn}
 
     {fn fibo-1 [ n ]
-        (cond
+        (cond n
             0 1 => 1
             otherwise => [:=
-                    (* x y *)
+                    (+ x y +)
                     where
                     x ( fibo-1 (! n - 1 !) )
                     y ( fibo-1 (! n - 2 !) )

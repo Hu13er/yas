@@ -19,8 +19,8 @@ pub const Token = struct {
 };
 
 pub const Tokenizer = struct {
-    src: [:0] const u8,
-    idx: usize,
+    source: [:0] const u8,
+    index: usize,
 
     const Self = @This();
 
@@ -36,43 +36,43 @@ pub const Tokenizer = struct {
         invalid,       // LINK: INVALID
     };
 
-    pub fn init(src: [:0]const u8) Self {
+    pub fn init(source: [:0]const u8) Self {
         return .{
-            .src = src,
-            .idx = 0,
+            .source = source,
+            .index = 0,
         };
     }
 
     pub fn next(self: *Self) ?Token {
-        if (self.idx > self.src.len) return null;
+        if (self.index > self.source.len) return null;
 
         var result = Token{
             .tag = .unknown,
-            .start = self.idx,
-            .end = self.idx,
+            .start = self.index,
+            .end = self.index,
         };
 
         state: switch (State.fresh) {
-            .fresh => switch (self.src[self.idx]) {
+            .fresh => switch (self.source[self.index]) {
                 0 => {
                     result.tag = .eof;
-                    result.start = self.idx;
-                    result.end = self.idx;
-                    self.idx += 1;
+                    result.start = self.index;
+                    result.end = self.index;
+                    self.index += 1;
                 },
                 '(', '{', '[' => {
                     // LINK: LOPEN
                     result.tag = .lopen;
-                    result.start = self.idx;
-                    self.idx += 1;
+                    result.start = self.index;
+                    self.index += 1;
                     continue :state .lopen;
                 },
                 ')', '}', ']' => {
                     // LINK: LCLOSE
                     result.tag = .lclose;
-                    result.start = self.idx;
-                    result.end = self.idx + 1;
-                    self.idx += 1;
+                    result.start = self.index;
+                    result.end = self.index + 1;
+                    self.index += 1;
                 },
                 'a'...'z', 'A'...'Z',
                 '+', '-', '*', '/', '\\', '=', '<', '>',
@@ -80,74 +80,74 @@ pub const Tokenizer = struct {
                 '@' => {
                     // LINK: SYMBOL
                     result.tag = .symbol;
-                    result.start = self.idx;
-                    self.idx += 1;
+                    result.start = self.index;
+                    self.index += 1;
                     continue :state .symbol;
                 },
                 '0'...'9' => {
                     // LINK: NUMBER
                     result.tag = .number;
-                    result.start = self.idx;
+                    result.start = self.index;
                     continue :state .int;
                 },
                 '.' => {
                     // LINK: NUMBER
                     result.tag = .number;
-                    result.start = self.idx;
+                    result.start = self.index;
                     continue :state .float;
                 },
                 ' ', '\t', '\n' => {
-                    self.idx += 1;
+                    self.index += 1;
                     continue :state .fresh;
                 },
                 '"' => {
                     result.tag = .string;
-                    result.start = self.idx;
-                    self.idx += 1;
+                    result.start = self.index;
+                    self.index += 1;
                     continue :state .string;
                 },
                 ';' => {
                     // LINK: COMMENT
                     result.tag = .comment;
-                    result.start = self.idx;
-                    self.idx += 1;
+                    result.start = self.index;
+                    self.index += 1;
                     continue :state .comment;
                 },
                 else => {
-                    self.idx += 1;
+                    self.index += 1;
                     continue :state .invalid;
                 },
             },
             .symbol => {
                 // LINK: SYMBOL
-                switch (self.src[self.idx]) {
+                switch (self.source[self.index]) {
                     'a'...'z', 'A'...'Z', '0'...'9',
                         '+', '-', '*', '/', '\\', '=', '<', '>',
                     '?', '!', '%', '&', '|', ':', '_',
                     '@', '.' => {
-                        self.idx += 1;
+                        self.index += 1;
                         continue :state .symbol;
                     },
                     ')', '}', ']' => {
                         result.tag = .lclose;
-                        result.end = self.idx + 1;
-                        self.idx += 1;
+                        result.end = self.index + 1;
+                        self.index += 1;
                     },
                     else => {
                         result.tag = .symbol;
-                        result.end = self.idx;
+                        result.end = self.index;
                     },
                 }
             },
             .int => {
                 // LINK: NUMBER
-                switch (self.src[self.idx]) {
+                switch (self.source[self.index]) {
                     '0'...'9' => {
-                        self.idx += 1;
+                        self.index += 1;
                         continue :state .int;
                     },
                     '.' => {
-                        self.idx += 1;
+                        self.index += 1;
                         continue :state .float;
                     },
                     'a'...'z', 'A'...'Z',
@@ -157,20 +157,20 @@ pub const Tokenizer = struct {
                         continue :state .symbol;
                     },
                     ')', '}', ']' => {
-                        self.idx += 1;
+                        self.index += 1;
                         continue :state .invalid;
                     },
                     else => {
                         result.tag = .number;
-                        result.end = self.idx;
+                        result.end = self.index;
                     },
                 }
             },
             .float => {
                 // LINK: NUMBER
-                switch (self.src[self.idx]) {
+                switch (self.source[self.index]) {
                     '0'...'9' => {
-                        self.idx += 1;
+                        self.index += 1;
                         continue :state .float;
                     },
                     'a'...'z', 'A'...'Z',
@@ -180,74 +180,74 @@ pub const Tokenizer = struct {
                         continue :state .symbol;
                     },
                     ')', '}', ']' => {
-                        self.idx += 1;
+                        self.index += 1;
                         continue :state .invalid;
                     },
                     else => {
                         result.tag = .number;
-                        result.end = self.idx;
+                        result.end = self.index;
                     },
                 }
             },
             .lopen => {
                 // LINK: LOPEN
-                switch (self.src[self.idx]) {
+                switch (self.source[self.index]) {
                     'a'...'z', 'A'...'Z', '0'...'9',
                         '+', '-', '*', '/', '\\', '=', '<', '>',
                     '?', '!', '%', '&', '|', ':', '_',
                     '@' => {
-                        self.idx += 1;
+                        self.index += 1;
                         continue :state .lopen;
                     },
                     else => {
                         result.tag = .lopen;
-                        result.end = self.idx;
+                        result.end = self.index;
                     },
                 }
             },
             .string => {
                 // LINK: STRING
-                switch (self.src[self.idx]) {
+                switch (self.source[self.index]) {
                     '"' => {
                         result.tag = .string;
-                        result.end = self.idx + 1;
-                        self.idx += 1;
+                        result.end = self.index + 1;
+                        self.index += 1;
                     },
                     '\\' => {
-                        self.idx += 1;
+                        self.index += 1;
                         continue :state .string_escape;
                     },
                     else => {
-                        self.idx += 1;
+                        self.index += 1;
                         continue :state .string;
                     }
                 }
             },
             .string_escape => {
                 // LINK: STRING
-                switch (self.src[self.idx]) {
+                switch (self.source[self.index]) {
                     '\n', 0 => continue :state .invalid,
                     else => {
-                        self.idx += 1;
+                        self.index += 1;
                         continue :state .string;
                     },
                 }
             },
             .comment => {
                 // LINK: COMMENT
-                switch (self.src[self.idx]) {
+                switch (self.source[self.index]) {
                     '\n' => {
                         result.tag = .comment;
-                        result.end = self.idx + 1;
-                        self.idx += 1;
+                        result.end = self.index + 1;
+                        self.index += 1;
                         continue :state .fresh;
                     },
                     0 => {
                         result.tag = .comment;
-                        result.end = self.idx;
+                        result.end = self.index;
                     },
                     else => {
-                        self.idx += 1;
+                        self.index += 1;
                         continue :state .comment;
                     }
                 }
@@ -289,7 +289,8 @@ const TestCase = struct {
     }
 };
 
-test "Basic Tokenizer tests" {
+test "Tokenizer tests" {
+    const PRINT = false;
     const test_cases = [_]TestCase{
         .{
             .desc = "Empty",
@@ -299,7 +300,7 @@ test "Basic Tokenizer tests" {
             },
         },
         .{
-            .desc = "Single Symbol",
+            .desc = "Single symbol",
             .src =
                 \\foobar
                 // f  o  o  b  a  r
@@ -311,7 +312,7 @@ test "Basic Tokenizer tests" {
             },
         },
         .{
-            .desc = "Single Symbol with star",
+            .desc = "Single symbol with star",
             .src =
                 \\foo*bar*baz
                 // f  o  o  *  b  a  r  *  b  a  z
@@ -519,16 +520,17 @@ test "Basic Tokenizer tests" {
     };
 
     const allocator = testing.allocator;
+    if (PRINT) debug.print("\n-== Tokenizer Tests ==-\n", .{});
     for (test_cases) |tc| {
-        tc.printHeader();
+        if (PRINT) tc.printHeader();
         var tokenizer = Tokenizer.init(tc.src);
 
         const tokens = try testCollectTokens(allocator, &tokenizer);
         defer allocator.free(tokens);
 
-        tc.printTokens(tokens);
+        if (PRINT) tc.printTokens(tokens);
         testing.expectEqualSlices(Token, tc.expected, tokens) catch |e| {
-            tc.printFail();
+            if (PRINT) tc.printFail();
             return e;
         };
     }
